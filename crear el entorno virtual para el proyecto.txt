@@ -1,0 +1,109 @@
+1. se crea el entorno virtual:
+	python -m venv venv
+	python -m uvicorn main:app --reload --port 8000
+2. Activar el entorno (Paso Crítico)
+	En PowerShell, a veces la ejecución de scripts está desactivada por seguridad. Primero, intenta activarlo así:
+	.\venv\Scripts\Activate.ps1
+	Si  da problemas: python -m venv venv --without-pip
+.\venv\Scripts\Activate.ps1
+(Si te sale el error rojo de permisos, recuerda usar: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process).
+3. Instala pip manualmente ahora que está activo:
+
+PowerShell
+python -get-pip.py  # O simplemente intenta:
+python -m ensurepip --upgrade
+
+Para encriptar la contraseña:
+1. Preparar la Seguridad
+Antes de los archivos, asegúrate de que tienes instalada la librería de encriptación en tu (venv):
+
+PowerShell
+pip install passlib[bcrypt]
+
+pip install fastapi uvicorn sqlalchemy pymysql
+
+pip show fastapi sqlalchemy
+
+Si no, forzar a instalar en el .venv del proyecto: .\venv\Scripts\python.exe -m pip install fastapi uvicorn sqlalchemy pymysql passlib[bcrypt] cryptography
+
+Obligarlo en el proyecto:f:\ud_cursos\python\proyecto\venv\Scripts\python.exe -m pip install --force-reinstall --no-cache-dir fastapi uvicorn sqlalchemy pymysql passlib[bcrypt] cryptography
+
+Developer: Reload Window
+
+Gemini dijo
+¡Victoria total! Esa es la línea que estábamos buscando:
+
+Location: F:\ud_cursos\python\proyecto\venv\Lib\site-packages
+
+Ahora sí, las librerías están exactamente donde deben estar. Si todavía ves alguna línea roja en Visual Studio Code, es puro "fantasma" del editor que se quedó con la imagen vieja.
+
+El paso final para limpiar el editor
+Para que VS Code se de cuenta de que ya todo está en su lugar, haz lo siguiente:
+
+Presiona Ctrl + Shift + P.
+
+Escribe y selecciona: "Developer: Reload Window".
+
+Al recargar, espera unos segundos a que el motor de Python (Pylance) termine de analizar los archivos.
+
+¡A probar el motor!
+Ahora que la plomería está lista, vamos a encender el servidor de Don Juan. En tu terminal (asegurándote de estar dentro de la carpeta proyecto), ejecuta:
+
+PowerShell
+uvicorn app.main:app --reload
+Nota: Uso app.main:app porque tu archivo main.py está dentro de la carpeta app.
+
+Qué verificar:
+Si ves un mensaje en verde que dice: Uvicorn running on http://127.0.0.1:8000, ¡el backend está vivo!	
+
+Solución error librería email: 
+¡No te asustes por el tamaño del error! Como estamos usando Pydantic para los Schemas y definimos el campo email: EmailStr (que es una validación muy potente), Python necesita una librería extra para verificar que los correos sean válidos.
+
+El error te está diciendo exactamente qué le falta: ImportError: email-validator is not installed.
+
+La solución
+Solo debes instalar ese complemento dentro de tu entorno virtual. Ejecuta este comando en tu terminal:
+
+PowerShell
+.\venv\Scripts\python.exe -m pip install "pydantic[email]"
+.\venv\Scripts\python.exe -m pip install email-validator
+.\venv\Scripts\python.exe -m uvicorn app.main:app --reload
+(Usamos la ruta larga de nuevo para asegurarnos de que se instale en el disco F: y no en la carpeta global).
+
+Remover: Get-ChildItem -Path . -Include __pycache__ -Recurse | Remove-Item -Force -Recurse
+
+Version de bycript: pip uninstall bcrypt
+pip install bcrypt==4.0.1
+
+
+{
+  "username": "super_admin",
+  "email": "control@restaurante.com",
+  "password": "PasswordSegura123",
+  "role": "admin"
+}
+
+para instalar en el proyecto actual: F:\ud_cursos\python\proyecto\venv\Scripts\python.exe -m pip install "python-jose[cryptography]" passlib[bcrypt] python-multipart
+
+
+Para el frontend toca:
+
+# 1. Aseguramos que estamos usando el pip del entorno interno
+.\venv\Scripts\python.exe -m pip install streamlit requests
+
+3. El "Plan de Ataque" para la próxima vez
+Cuando estés listo para que el profesor vea la aplicación funcionando en el navegador, solo tendremos que:
+
+Abrir la Terminal 1 y lanzar el Backend (uvicorn).
+
+Abrir la Terminal 2 y lanzar el Frontend (streamlit).
+
+3. Cómo lo ejecutas para verlo
+Recuerda que ahora tienes dos programas diferentes. Haz esto:
+
+Terminal 1 (Backend): .\venv\Scripts\python.exe -m uvicorn app.main:app --reload
+
+Terminal 2 (Frontend): .\venv\Scripts\streamlit run frontend/app_web.py
+
+
+
