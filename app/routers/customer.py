@@ -11,8 +11,13 @@ router = APIRouter(prefix="/customers", tags=["Clientes"])
 
 @router.get("/", response_model=List[CustomerOut])
 def get_customers(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role not in ["admin", "mesero"]:
-        raise HTTPException(status_code=403, detail="Acceso denegado")
+    # if current_user.role not in ["admin", "mesero"]:
+    #     raise HTTPException(status_code=403, detail="Acceso denegado")
+    
+    # Si es cliente, solo le devolvemos su propia ficha por seguridad
+    if current_user.role == "cliente":
+        return db.query(Customer).filter(Customer.user_id == current_user.id).all()
+    
     return db.query(Customer).all()
 
 @router.post("/", response_model=CustomerOut)

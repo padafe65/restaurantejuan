@@ -12,7 +12,24 @@ API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(page_title="Restaurante Don Juan - Gestión", layout="wide", page_icon="🍽️")
 
-# --- FUNCIONES DE APOYO ---
+# --- 1. INICIALIZACIÓN DEL ESTADO ---
+if "token" not in st.session_state:
+    st.session_state.token = None
+if "role" not in st.session_state:
+    st.session_state.role = None
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
+if "user_id" not in st.session_state:
+    st.session_state.user_id = None
+if "reset_u" not in st.session_state: 
+    st.session_state.reset_u = 0
+
+# --- 2. CONTROL DE NAVEGACIÓN ---
+if st.session_state.token is not None:
+    with st.sidebar:
+        if st.button("⚠️ Recordatorio: Cierre Sesión antes de salir", width='stretch'):
+            st.warning("Use el botón 'Cerrar Sesión' al final de la barra lateral.")
+
 def pie_de_pagina():
     st.markdown("---")
     st.markdown(
@@ -21,18 +38,8 @@ def pie_de_pagina():
         unsafe_allow_html=True
     )
 
-# --- ESTADO DE SESIÓN ---
-if "token" not in st.session_state:
-    st.session_state.token = None
-if "role" not in st.session_state:
-    st.session_state.role = None
-if "user_name" not in st.session_state:
-    st.session_state.user_name = None
-if "reset_u" not in st.session_state: 
-    st.session_state.reset_u = 0
-
 # ==========================================
-#                PANTALLA DE LOGIN
+#                 PANTALLA DE LOGIN
 # ==========================================
 if st.session_state.token is None:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -52,20 +59,20 @@ if st.session_state.token is None:
                         d = res.json()
                         st.session_state.token = d["access_token"]
                         st.session_state.role = d["role"]
+                        st.session_state.user_id = d.get("user_id") 
                         st.session_state.user_name = u.split('@')[0]
                         st.success("✅ ¡Bienvenido!")
                         st.rerun()
                     else:
-                        st.error("❌ Credenciales incorrectas o cuenta inactiva.")
+                        st.error("❌ Credenciales incorrectas.")
                 except:
                     st.error("📡 Error de conexión con el servidor.")
         pie_de_pagina()
-    st.stop() # Detiene la ejecución para que no intente cargar el Dashboard sin login
+    st.stop() 
 
 # ==========================================
-#         DASHBOARD PRINCIPAL (LOGUEADO)
+#          DASHBOARD PRINCIPAL
 # ==========================================
-# Si llegamos aquí, es porque hay un token válido
 headers = {"Authorization": f"Bearer {st.session_state.token}"}
 rol = st.session_state.role
 
@@ -76,12 +83,12 @@ with st.sidebar:
     st.write(f"### 👋 Hola, {st.session_state.user_name}")
     st.caption(f"Rol: {str(rol).upper()}")
     st.divider()
-    if st.button("🚪 Cerrar Sesión", width='stretch'):
-        st.session_state.token = None
-        st.session_state.role = None
+    if st.button("🚪 Cerrar Sesión", width='stretch', type="primary"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
         st.rerun()
 
-# Definición de pestañas según rol
+# --- DEFINICIÓN DE MENÚ SEGÚN ROL ---
 if rol == "admin":
     menu = ["🪑 Mesas", "👥 Clientes", "📅 Reservas", "📋 Auditoría", "⚙️ Usuarios"]
 elif rol == "mesero":
@@ -91,144 +98,139 @@ else:
 
 tabs = st.tabs(menu)
 
-# --- PESTAÑA 0: MESAS ---
+# --- PESTAÑA 0: MESAS (STAFF) o MIS RESERVAS (CLIENTE) ---
 with tabs[0]:
     if rol in ["admin", "mesero"]:
-        st.header("🪑 Estado Real de las Mesas")
+        st.header("🪑 Estado de las Mesas")
         res_t = requests.get(f"{API_URL}/tables/", headers=headers)
-        
         if res_t.status_code == 200:
             mesas_list = res_t.json()
-            
-            # --- SECCIÓN 1: VISTA VISUAL (Tarjetas rápidas) ---
             cols = st.columns(4) 
             for i, mesa in enumerate(mesas_list):
                 with cols[i % 4]:
-                    # Color e icono según estado
                     emoji = "🔴" if mesa['status'] == 'ocupada' else "🟡" if mesa['status'] == 'reservada' else "🟢"
-                    st.metric(label=f"Mesa {mesa['number']}", value=mesa['status'].upper(), delta=emoji, delta_color="normal")
-                    
-                    # BOTÓN DE ACCIÓN RÁPIDA (Solo aparece si no está libre)
+                    st.metric(label=f"Mesa {mesa['number']}", value=mesa['status'].upper(), delta=emoji)
                     if mesa['status'] in ['ocupada', 'reservada']:
                         if st.button(f"🔓 Liberar #{mesa['number']}", key=f"btn_lib_{mesa['id']}"):
-                            # Intentamos llamar al PATCH si lo creaste, si no, usa el PUT normal
                             r = requests.patch(f"{API_URL}/tables/{mesa['id']}/release", headers=headers)
                             if r.status_code == 200:
-                                st.toast(f"Mesa {mesa['number']} ahora está LIBRE")
+                                st.toast(f"Mesa {mesa['number']} LIBRE")
                                 time.sleep(0.5)
                                 st.rerun()
-                            else:
-                                st.error("No se pudo liberar. ¿Creaste el endpoint en el Backend?")
-
             st.divider()
-            
-            # --- SECCIÓN 2: GESTIÓN Y EDICIÓN (Tu código original) ---
-            st.subheader("🔍 Configuración y Edición")
+            st.subheader("📋 Listado de Mesas")
             st.dataframe(pd.DataFrame(mesas_list), width='stretch')
             
-            opciones_m = {f"Mesa {m['number']} | Cap: {m['capacity']}": m for m in mesas_list}
-            sel_m = st.selectbox("Cargar mesa para modificar:", ["-- Nueva Mesa --"] + list(opciones_m.keys()))
-            m_data = opciones_m.get(sel_m, {"id": 0, "number": 1, "capacity": 2, "status": "libre"})
+            if rol == "admin": # Solo el admin crea mesas
+                with st.expander("➕ Agregar Nueva Mesa"):
+                    with st.form("new_table"):
+                        n_num = st.number_input("Número", min_value=1)
+                        n_cap = st.number_input("Capacidad", min_value=1)
+                        if st.form_submit_button("Guardar Mesa"):
+                            requests.post(f"{API_URL}/tables/", json={"number":n_num, "capacity":n_cap}, headers=headers)
+                            st.rerun()
+    else:
+        st.header("🔍 Mis Reservas")
+        # El cliente SOLO CONSULTA (Visualización de tabla)
+        res_r = requests.get(f"{API_URL}/reservations/", headers=headers)
+        if res_r.status_code == 200:
+            data = res_r.json()
+            if data:
+                st.info("A continuación se detallan tus reservaciones en el sistema.")
+                st.dataframe(pd.DataFrame(data), width='stretch')
+            else:
+                st.info("No se encontraron reservas registradas a tu nombre.")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                with st.form("form_mesas_edit"):
-                    st.info("Editando..." if m_data['id'] != 0 else "Creando Nueva")
-                    n_num = st.number_input("Número de Mesa", value=int(m_data['number']), min_value=1)
-                    n_cap = st.number_input("Capacidad (Personas)", value=int(m_data['capacity']), min_value=1)
-                    
-                    lista_est = ["libre", "ocupada", "reservada"]
-                    idx_est = lista_est.index(m_data['status']) if m_data['status'] in lista_est else 0
-                    n_stat = st.selectbox("Cambiar Estado Manualmente", lista_est, index=idx_est)
-                    
-                    if st.form_submit_button("💾 Guardar Cambios"):
-                        payload = {"number": n_num, "capacity": n_cap, "status": n_stat}
-                        if m_data['id'] == 0:
-                            requests.post(f"{API_URL}/tables/", json=payload, headers=headers)
-                        else:
-                            requests.put(f"{API_URL}/tables/{m_data['id']}", json=payload, headers=headers)
-                        st.rerun()
-            
-            with col2:
-                if rol == "admin" and m_data['id'] != 0:
-                    st.subheader("🗑️ Zona de Peligro")
-                    if st.button("🔴 Eliminar Mesa Definitivamente") and st.checkbox("Entiendo que esto borrará la mesa"):
-                        requests.delete(f"{API_URL}/tables/{m_data['id']}", headers=headers)
-                        st.rerun()
-# --- PESTAÑA 1: CLIENTES ---
-if rol in ["admin", "mesero"]:
-    with tabs[1]:
+# --- PESTAÑA 1: CLIENTES (STAFF) o MI PERFIL (CLIENTE) ---
+with tabs[1]:
+    if rol in ["admin", "mesero"]:
         st.header("👥 Gestión de Clientes")
         res_c = requests.get(f"{API_URL}/customers/", headers=headers)
         if res_c.status_code == 200:
             c_list = res_c.json()
             st.dataframe(pd.DataFrame(c_list), width='stretch')
             st.divider()
-            opciones_c = {f"{c['full_name']} | 📱 {c.get('phone','')}": c for c in c_list}
-            sel_c = st.selectbox("Busca por nombre o teléfono:", ["-- Seleccionar --"] + list(opciones_c.keys()))
-            c_sel = opciones_c.get(sel_c, {"id": 0, "full_name": "", "phone": "", "whatsapp": "", "address": "", "user_id": 0})
-            c1, c2 = st.columns(2)
-            with c1:
-                if c_sel['id'] != 0:
-                    with st.form("form_cliente"):
-                        f_name = st.text_input("Nombre Completo", value=c_sel['full_name'])
-                        f_phone = st.text_input("Teléfono", value=c_sel['phone'])
-                        f_ws = st.text_input("WhatsApp", value=c_sel['whatsapp'])
-                        f_dir = st.text_input("Dirección", value=c_sel.get('address',''))
-                        if st.form_submit_button("💾 Actualizar Ficha"):
-                            p = {"full_name": f_name, "phone": f_phone, "whatsapp": f_ws, "address": f_dir}
-                            requests.put(f"{API_URL}/customers/{c_sel['id']}", json=p, headers=headers)
-                            st.rerun()
-
-# --- PESTAÑA 2: RESERVAS ---
-with tabs[2]:
-    if rol in ["admin", "mesero"]:
-        render_reservas(API_URL, headers, rol)
+            
+            # Formulario para que el staff complete/edite datos
+            opciones_c = {f"{c['full_name']} | ID: {c['id']}": c for c in c_list}
+            sel_c = st.selectbox("Seleccionar Cliente para editar:", ["-- Seleccionar --"] + list(opciones_c.keys()))
+            c_sel = opciones_c.get(sel_c, {"id": 0, "full_name": "", "phone": "", "whatsapp": "", "address": ""})
+            
+            if c_sel['id'] != 0:
+                with st.form("staff_edit_customer"):
+                    st.info(f"Editando datos de: {c_sel['full_name']}")
+                    f_name = st.text_input("Nombre", value=c_sel['full_name'])
+                    f_phone = st.text_input("Teléfono", value=c_sel['phone'])
+                    f_ws = st.text_input("WhatsApp", value=c_sel['whatsapp'])
+                    f_dir = st.text_input("Dirección", value=c_sel.get('address',''))
+                    if st.form_submit_button("💾 Guardar cambios"):
+                        payload = {"full_name": f_name, "phone": f_phone, "whatsapp": f_ws, "address": f_dir}
+                        requests.put(f"{API_URL}/customers/{c_sel['id']}", json=payload, headers=headers)
+                        st.rerun()
     else:
         st.header("👤 Mi Perfil")
-        st.info("Completa tus datos para agilizar tus reservas.")
+        # El cliente consulta su ficha y completa datos si faltan
+        res_c = requests.get(f"{API_URL}/customers/", headers=headers)
+        mi_ficha = {"id": 0, "full_name": st.session_state.user_name, "phone": "", "whatsapp": "", "address": ""}
+        if res_c.status_code == 200:
+            # Match por user_id
+            mi_ficha = next((c for c in res_c.json() if c.get('user_id') == st.session_state.user_id), mi_ficha)
 
-# --- PESTAÑA 3: AUDITORÍA ---
-if rol == "admin":
+        with st.form("perfil_cliente_self"):
+            st.info("Aquí puedes completar tus datos personales.")
+            fn = st.text_input("Nombre Completo", value=mi_ficha['full_name'])
+            ph = st.text_input("Teléfono", value=mi_ficha['phone'])
+            ws = st.text_input("WhatsApp", value=mi_ficha['whatsapp'])
+            ad = st.text_input("Dirección", value=mi_ficha.get('address',''))
+            
+            if st.form_submit_button("💾 Actualizar mis datos"):
+                payload = {"full_name": fn, "phone": ph, "whatsapp": ws, "address": ad, "user_id": st.session_state.user_id}
+                if mi_ficha['id'] != 0:
+                    requests.put(f"{API_URL}/customers/{mi_ficha['id']}", json=payload, headers=headers)
+                else:
+                    requests.post(f"{API_URL}/customers/", json=payload, headers=headers)
+                st.success("¡Perfil actualizado con éxito!")
+                time.sleep(1)
+                st.rerun()
+
+# --- PESTAÑAS EXCLUSIVAS PARA STAFF ---
+if len(tabs) > 2:
+    with tabs[2]:
+        # Esta pestaña solo aparece para admin y mesero
+        # Aquí es donde se crean y modifican las reservas (CRUD completo para Staff)
+        render_reservas(API_URL, headers, rol)
+
+if len(tabs) > 3 and rol == "admin":
     with tabs[3]:
         st.header("📋 Auditoría de XAMPP")
-        if st.button("🔄 Consultar Logs Recientes", key="btn_logs_final"):
+        if st.button("🔄 Consultar Logs"):
             res_l = requests.get(f"{API_URL}/reservations/logs", headers=headers)
             if res_l.status_code == 200:
                 st.dataframe(pd.DataFrame(res_l.json()), width='stretch')
 
-# --- PESTAÑA 4: USUARIOS ---
-if rol == "admin":
+if len(tabs) > 4 and rol == "admin":
     with tabs[4]:
         st.header("⚙️ Gestión de Usuarios")
         res_u = requests.get(f"{API_URL}/users/", headers=headers)
         if res_u.status_code == 200:
             u_list = res_u.json()
             st.dataframe(pd.DataFrame(u_list), width='stretch')
+            # Lógica de edición de usuarios solo para Admin
             st.divider()
-
-            op_u = {f"{u['username']} ({u['email']})": u for u in u_list}
-            sel_u = st.selectbox("Seleccionar Usuario:", ["-- Nuevo --"] + list(op_u.keys()), key=f"sb_u_{st.session_state.reset_u}")
-            
-            u_dat = op_u.get(sel_u, {"id": 0, "email": "", "username": "", "role": "cliente", "is_active": True})
-
-            with st.form(f"f_u_{u_dat['id']}"):
-                u_email = st.text_input("Email", value=u_dat['email'])
-                u_name = st.text_input("Username", value=u_dat['username'])
-                u_role = st.selectbox("Rol", ["admin", "mesero", "cliente"], index=0)
-                
-                if st.form_submit_button("💾 Guardar y Limpiar Filtro"):
-                    payload = {"email": u_email, "username": u_name, "role": u_role, "is_active": True}
+            op_u = {f"{u['username']}": u for u in u_list}
+            sel_u = st.selectbox("Editar Usuario:", ["-- Nuevo --"] + list(op_u.keys()))
+            u_dat = op_u.get(sel_u, {"id": 0, "email": "", "username": "", "role": "cliente"})
+            with st.form("edit_user"):
+                un = st.text_input("Username", value=u_dat['username'])
+                em = st.text_input("Email", value=u_dat['email'])
+                ro = st.selectbox("Rol", ["admin", "mesero", "cliente"], index=["admin", "mesero", "cliente"].index(u_dat['role']))
+                if st.form_submit_button("💾 Guardar Usuario"):
+                    payload = {"username": un, "email": em, "role": ro, "is_active": True}
                     if u_dat['id'] == 0:
                         payload["password"] = "123456"
-                        r = requests.post(f"{API_URL}/users/", json=payload, headers=headers)
+                        requests.post(f"{API_URL}/users/", json=payload, headers=headers)
                     else:
-                        r = requests.put(f"{API_URL}/users/{u_dat['id']}", json=payload, headers=headers)
-                    
-                    if r.status_code in [200, 201]:
-                        st.success("✅ Actualizado en XAMPP")
-                        st.session_state.reset_u += 1 
-                        time.sleep(1)
-                        st.rerun()
+                        requests.put(f"{API_URL}/users/{u_dat['id']}", json=payload, headers=headers)
+                    st.rerun()
 
 pie_de_pagina()
