@@ -9,6 +9,25 @@ from app.auth import get_current_user
 
 router = APIRouter(prefix="/tables", tags=["Mesas"])
 
+# app/routers/table.py
+
+@router.patch("/{table_id}/status")
+def update_table_status(table_id: int, status_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in ["admin", "mesero"]:
+        raise HTTPException(status_code=403, detail="No tienes permisos")
+    
+    table = db.query(Table).filter(Table.id == table_id).first()
+    if not table:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    
+    nuevo_status = status_data.get("status")
+    if nuevo_status not in ["libre", "reservada", "ocupada"]:
+        raise HTTPException(status_code=400, detail="Estado no válido")
+        
+    table.status = nuevo_status
+    db.commit()
+    return {"message": f"Mesa {table.number} actualizada a {nuevo_status}"}
+
 @router.get("/", response_model=List[TableOut])
 def get_tables(db: Session = Depends(get_db)):
     return db.query(Table).all()

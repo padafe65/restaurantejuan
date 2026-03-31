@@ -1,0 +1,113 @@
+2. Creación del Entorno Virtual (VENV)
+El entorno virtual sirve para que las librerías de este proyecto no se mezclen con otras de la computadora.
+
+En la terminal, diles que escriban el comando según su sistema operativo:
+
+En Windows:
+
+Intento
+python -m venv venv
+
+en mi caso: 
+	1. python -m venv venv --without-pip
+	2. .\venv\Scripts\Activate.ps1 --> Para activar el entorno
+	3. python -m ensurepip --upgrade --> Inyectar las herramientas (pip)
+Paso 4: Instalar las librerías de la App:
+	
+	python -m pip install fastapi
+
+	1. pip install fastapi uvicorn
+
+Paso 5: Crear el archivo "Hola Mundo"
+Para que tus compañeros vean que la instalación funciona, diles que creen un archivo nuevo en la raíz de la carpeta (fuera de la carpeta venv) llamado main.pyy peguen este código:
+
+Pitón
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def inicio():
+    return {"mensaje": "¡Felicidades compañeros, el entorno funciona!"}
+
+Paso 6: Arrancar el servidor
+
+uvicorn main:app --reload
+
+_________________________________________________________________________________________________________________________________________
+
+Pasos de verificación:
+
+	Gemini dijo
+¡Claro que sí! Aquí tienes tu "guía de supervivencia" rápida. Estas son las instrucciones exactas que seguimos para limpiar el camino y lograr que el restaurante de "Don José" funcione en tu computadora.
+
+Úsalas en este orden si alguna vez necesitas recrear todo:
+
+1. Preparación del Terreno (El Entorno Virtual)
+python -m venv venv: Crea una "caja aislada" (entorno virtual) para que las librerías del proyecto no se mezclen con otras versiones de Python de tu PC.
+
+.\venv\Scripts\Activate.ps1: Entra a esa caja. Sabes que funcionó porque aparece (venv) al principio de tu terminal.
+
+2. Instalación de la "Maquinaria" (Librerías)
+Instalamos las piezas del motor una por una según nos las pidió el sistema:
+
+pip install fastapi uvicorn: El corazón del Backend y el servidor que lo corre.
+
+pip install sqlalchemy pymysql cryptography: El puente para que Python hable con tu base de datos MySQL y los datos no se borren al apagar la PC.
+
+pip install email-validator: Para que el sistema valide que los correos de los clientes tengan un formato real.
+
+pip install "python-jose[cryptography]" passlib[bcrypt]: Las llaves de seguridad para encriptar contraseñas y manejar los roles de Admin y Mesero.
+
+pip install python-multipart: Permite que el sistema reciba datos desde los formularios de inicio de sesión (Login).
+
+3. El Comando de Arranque Definitivo
+Este es el que debes usar para mostrarle al profesor:
+
+PowerShell
+python -m uvicorn app.main:app
+[!IMPORTANT]
+¿Por qué usamos python -m? Porque tienes muchas versiones de Python (3.11, 3.13, 3.14). Al escribirlo así, te aseguras de que se use el Python que está dentro de tu carpeta de proyecto y no el de Windows
+
+______________________________________________________________________________________________________________________________________________________
+
+Instrucciones frontend:
+
+.\venv\Scripts\Activate.ps1
+
+
+Gemini dijo
+Para arrancar el Frontend de tu proyecto y mostrárselo a don José, debes seguir un proceso muy similar al del Backend, asegurándote de usar una segunda terminal para que ambos procesos corran al mismo tiempo.
+
+Aquí tienes las instrucciones paso a paso:
+
+1. Abrir una nueva terminal
+En VS Code, haz clic en el icono "+" que está en la esquina superior derecha del panel de la terminal. Es fundamental que el Backend siga corriendo en la primera terminal para que el Frontend pueda consultar los datos.
+
+2. Activar el entorno virtual
+En la nueva terminal, debes entrar de nuevo a la "caja aislada" que creaste:
+
+PowerShell
+.\venv\Scripts\Activate.ps1
+(Verifica que aparezca el texto (venv) al inicio de la línea).
+
+3. Ejecutar Streamlit
+Como ya instalaste todas las librerías necesarias anteriormente (incluyendo streamlit, pandas y requests), usa el siguiente comando para lanzar la interfaz de usuario:
+
+PowerShell
+python -m streamlit run frontend/app_web.py
+¿Por qué hacerlo así?
+Uso de python -m: Al igual que con el Backend, esto garantiza que se use la versión 3.11 de tu entorno virtual y no la 3.14 del sistema, evitando errores de "módulo no encontrado".
+
+Comunicación Interna: Tu archivo gestion_reservas.py utiliza la librería requests para conectarse a http://127.0.0.1:8000 (tu Backend). Si el Backend no está encendido, el Frontend mostrará errores de conexión.
+
+Checklist para la sustentación de hoy (30 de marzo):
+Terminal 1: Debe decir Uvicorn running on http://127.0.0.1:8000.
+
+
+Terminal 2: Debe mostrar las URLs de Streamlit (Local y Network).
+
+Navegador: Se abrirá automáticamente una pestaña con la interfaz del restaurante donde don José podrá ver cómo se gestionan sus mesas
+
+Nota: Falta --> pip install "bcrypt==4.0.1", para hashear la contraseña.
+

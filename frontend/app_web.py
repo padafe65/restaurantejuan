@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import os
 from modulos.gestion_reservas import render_reservas
-import time 
+import time as python_time 
 
 # --- CONFIGURACIÓN INICIAL ---
 LOGO_PATH = os.path.join("frontend", "logo_restaurante.jpg")
@@ -99,29 +99,61 @@ else:
 tabs = st.tabs(menu)
 
 # --- PESTAÑA 0: MESAS (STAFF) o MIS RESERVAS (CLIENTE) ---
+# --- PESTAÑA 0: MESAS (STAFF) o MIS RESERVAS (CLIENTE) ---
 with tabs[0]:
     if rol in ["admin", "mesero"]:
         st.header("🪑 Estado de las Mesas")
+        
+        # 1. Obtener datos frescos de XAMPP
         res_t = requests.get(f"{API_URL}/tables/", headers=headers)
+        res_r_check = requests.get(f"{API_URL}/reservations/", headers=headers)
+        
         if res_t.status_code == 200:
             mesas_list = res_t.json()
+            reservas_raw = res_r_check.json() if res_r_check.status_code == 200 else []
+            
+            # --- BLOQUE DE COHERENCIA AUTOMÁTICA (Sincronización al entrar) ---
+            # Este bloque corrige las mesas 2 y 3 que mencionaste
+            for m in mesas_list:
+                # Buscamos si tiene reserva confirmada en la DB
+                tiene_reserva = any(r['table_id'] == m['id'] and r['status'] == 'confirmada' for r in reservas_raw)
+                
+                # Caso A: XAMPP dice LIBRE pero hay RESERVA CONFIRMADA -> Forzamos estado a 'reservada'
+                if tiene_reserva and m['status'] == 'libre':
+                    # Nota: Usamos la ruta /tables/{id} con PUT ya que tu router tiene update_table
+                    requests.put(f"{API_URL}/tables/{m['id']}", json={"status": "reservada"}, headers=headers)
+                    m['status'] = 'reservada' # Actualización visual inmediata
+                
+                # Caso B: XAMPP dice RESERVADA pero NO hay reserva activa -> Liberamos mesa
+                elif not tiene_reserva and m['status'] == 'reservada':
+                    requests.patch(f"{API_URL}/tables/{m['id']}/release", headers=headers)
+                    m['status'] = 'libre'
+
+            # 2. Mostrar Métricas (Ahora ya vendrán coherentes)
             cols = st.columns(4) 
             for i, mesa in enumerate(mesas_list):
                 with cols[i % 4]:
                     emoji = "🔴" if mesa['status'] == 'ocupada' else "🟡" if mesa['status'] == 'reservada' else "🟢"
                     st.metric(label=f"Mesa {mesa['number']}", value=mesa['status'].upper(), delta=emoji)
+                    
                     if mesa['status'] in ['ocupada', 'reservada']:
                         if st.button(f"🔓 Liberar #{mesa['number']}", key=f"btn_lib_{mesa['id']}"):
-                            r = requests.patch(f"{API_URL}/tables/{mesa['id']}/release", headers=headers)
-                            if r.status_code == 200:
-                                st.toast(f"Mesa {mesa['number']} LIBRE")
-                                time.sleep(0.5)
-                                st.rerun()
+                            # VALIDACIÓN DE SEGURIDAD (No permite liberar si hay reserva activa)
+                            activas = [r for r in reservas_raw if r['table_id'] == mesa['id'] and r['status'] == 'confirmada']
+                            if activas:
+                                st.error(f"Acción bloqueada: La mesa {mesa['number']} tiene una reserva activa. Gestiónela en Reservas.")
+                            else:
+                                r = requests.patch(f"{API_URL}/tables/{mesa['id']}/release", headers=headers)
+                                if r.status_code == 200:
+                                    st.toast(f"Mesa {mesa['number']} LIBRE")
+                                    python_time.sleep(0.5)
+                                    st.rerun()
+
             st.divider()
             st.subheader("📋 Listado de Mesas")
             st.dataframe(pd.DataFrame(mesas_list), width='stretch')
             
-            if rol == "admin": # Solo el admin crea mesas
+            if rol == "admin":
                 with st.expander("➕ Agregar Nueva Mesa"):
                     with st.form("new_table"):
                         n_num = st.number_input("Número", min_value=1)
@@ -130,8 +162,8 @@ with tabs[0]:
                             requests.post(f"{API_URL}/tables/", json={"number":n_num, "capacity":n_cap}, headers=headers)
                             st.rerun()
     else:
+        # --- VISTA PARA CLIENTES ---
         st.header("🔍 Mis Reservas")
-        # El cliente SOLO CONSULTA (Visualización de tabla)
         res_r = requests.get(f"{API_URL}/reservations/", headers=headers)
         if res_r.status_code == 200:
             data = res_r.json()
@@ -140,7 +172,7 @@ with tabs[0]:
                 st.dataframe(pd.DataFrame(data), width='stretch')
             else:
                 st.info("No se encontraron reservas registradas a tu nombre.")
-
+                
 # --- PESTAÑA 1: CLIENTES (STAFF) o MI PERFIL (CLIENTE) ---
 with tabs[1]:
     if rol in ["admin", "mesero"]:
@@ -151,14 +183,12 @@ with tabs[1]:
             st.dataframe(pd.DataFrame(c_list), width='stretch')
             st.divider()
             
-            # Formulario para que el staff complete/edite datos
             opciones_c = {f"{c['full_name']} | ID: {c['id']}": c for c in c_list}
             sel_c = st.selectbox("Seleccionar Cliente para editar:", ["-- Seleccionar --"] + list(opciones_c.keys()))
             c_sel = opciones_c.get(sel_c, {"id": 0, "full_name": "", "phone": "", "whatsapp": "", "address": ""})
             
             if c_sel['id'] != 0:
                 with st.form("staff_edit_customer"):
-                    st.info(f"Editando datos de: {c_sel['full_name']}")
                     f_name = st.text_input("Nombre", value=c_sel['full_name'])
                     f_phone = st.text_input("Teléfono", value=c_sel['phone'])
                     f_ws = st.text_input("WhatsApp", value=c_sel['whatsapp'])
@@ -169,11 +199,9 @@ with tabs[1]:
                         st.rerun()
     else:
         st.header("👤 Mi Perfil")
-        # El cliente consulta su ficha y completa datos si faltan
         res_c = requests.get(f"{API_URL}/customers/", headers=headers)
         mi_ficha = {"id": 0, "full_name": st.session_state.user_name, "phone": "", "whatsapp": "", "address": ""}
         if res_c.status_code == 200:
-            # Match por user_id
             mi_ficha = next((c for c in res_c.json() if c.get('user_id') == st.session_state.user_id), mi_ficha)
 
         with st.form("perfil_cliente_self"):
@@ -190,14 +218,12 @@ with tabs[1]:
                 else:
                     requests.post(f"{API_URL}/customers/", json=payload, headers=headers)
                 st.success("¡Perfil actualizado con éxito!")
-                time.sleep(1)
+                python_time.sleep(1)
                 st.rerun()
 
 # --- PESTAÑAS EXCLUSIVAS PARA STAFF ---
 if len(tabs) > 2:
     with tabs[2]:
-        # Esta pestaña solo aparece para admin y mesero
-        # Aquí es donde se crean y modifican las reservas (CRUD completo para Staff)
         render_reservas(API_URL, headers, rol)
 
 if len(tabs) > 3 and rol == "admin":
@@ -215,7 +241,6 @@ if len(tabs) > 4 and rol == "admin":
         if res_u.status_code == 200:
             u_list = res_u.json()
             st.dataframe(pd.DataFrame(u_list), width='stretch')
-            # Lógica de edición de usuarios solo para Admin
             st.divider()
             op_u = {f"{u['username']}": u for u in u_list}
             sel_u = st.selectbox("Editar Usuario:", ["-- Nuevo --"] + list(op_u.keys()))
